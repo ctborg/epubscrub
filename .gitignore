@@ -1,0 +1,19 @@
+# Build outputs
+/epubscrub
+*.o
+*.a
+*.dylib
+*.so
+
+# Test and temporary files
+*.epub
+*.clean.epub
+*.report
+*.log
+
+# Editor and OS files
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/

@@ -1,0 +1,180 @@
+.Dd June 5, 2026
+.Dt EPUBSCRUB 1
+.Os
+.Sh NAME
+.Nm epubscrub
+.Nd sanitize EPUB files by removing common exploit vectors
+.Sh SYNOPSIS
+.Nm
+.Op Fl -check
+.Op Fl -policy Ar calm Ns | Ns Ar wary Ns | Ns Ar paranoid
+.Op Fl -calm | Fl -wary | Fl -paranoid
+.Op Fl -report Ar file
+.Op Fl -report-format Ar text Ns | Ns Ar json
+.Ar input.epub
+.Op Fl o Ar output.epub
+.Nm
+.Fl -help
+.Sh DESCRIPTION
+.Nm
+opens an EPUB archive, inspects each ZIP entry, removes or rewrites risky
+content, and optionally writes a cleaned EPUB.
+.Pp
+It is a sanitizer, not a guarantee that a file is malware-free.
+It is intended
+to reduce common EPUB attack surfaces such as active markup, embedded scripts,
+unsafe archive entries, and unexpected binary payloads.
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl -check
+Run the full scan and in-memory sanitization pass without writing an output
+EPUB.
+The report shows whether the file is clean, would be sanitized, or is
+rejected.
+Removed files and modified content include a short reason.
+.It Fl -report Ar file
+Write the text report to
+.Ar file
+instead of standard output.
+.It Fl -report-format Ar text Ns | Ns Ar json
+Choose the report format.
+The default is
+.Ar text .
+.It Fl -policy Ar calm Ns | Ns Ar wary Ns | Ns Ar paranoid
+Choose the sanitization policy.
+The default is
+.Ar wary .
+.It Fl -calm
+Use the calm policy.
+This removes clear active/script/executable payloads while leaving more normal
+EPUB resources alone.
+.It Fl -wary
+Use the wary policy.
+This is the default practical baseline.
+.It Fl -paranoid
+Use the paranoid policy.
+This minimizes attack surface by also removing SVG, fonts, media, and external
+text links.
+.It Fl o Ar output.epub
+Write the sanitized EPUB to
+.Ar output.epub .
+Required unless
+.Fl -check
+is used.
+.It Fl h , Fl -help
+Show command usage.
+.El
+.Sh SANITIZATION POLICY
+The default
+.Ar wary
+policy removes or rejects:
+.Bl -bullet
+.It
+EPUB archives over the configured size limit.
+.It
+ZIP entries with path traversal, unsafe names, symlink behavior, unsupported
+compression methods, extreme compression ratios, or invalid CRCs.
+.It
+JavaScript files, executable-like files, script files, nested archives, and
+unknown file types outside the EPUB allowlist.
+.It
+.Li <script> ,
+.Li <iframe> ,
+.Li <object> ,
+.Li <embed> ,
+and form-control markup in XHTML, HTML, XML, NCX, and SVG content.
+.It
+Event handler attributes such as
+.Li onclick
+and
+.Li onload .
+.It
+External resource loads in
+.Li <img> ,
+.Li <link> ,
+and
+.Li <iframe>
+tags.
+.It
+The javascript:, vbscript:, and unsafe data: schemes.
+.It
+CSS
+.Li @import
+rules and remote, script, or data URLs in CSS
+.Li url(...)
+values.
+.El
+.Pp
+The default
+.Ar wary
+policy preserves local CSS, sanitized SVG files, internal navigation links,
+standard EPUB metadata, images, and font files such as
+.Pa .ttf ,
+.Pa .otf ,
+.Pa .woff ,
+and
+.Pa .woff2 .
+.Pp
+The
+.Ar calm
+policy is less disruptive and permits remote resource references except for
+script-oriented URLs.
+The
+.Ar paranoid
+policy is more aggressive and removes SVG, fonts, media, and external text
+links.
+.Pp
+When a file is removed, matching OPF manifest entries are removed as well.
+.Sh OUTPUT
+Text reports include the input, optional output, status, policy, summary counts,
+and event lines.
+JSON reports include the same fields as structured data:
+.Bd -literal -offset indent
+epubscrub --check --policy paranoid --report-format json book.epub
+.Ed
+.Sh EXIT STATUS
+.Bl -tag -width Ds
+.It 0
+The input was already clean.
+.It 1
+The input was sanitized or would be sanitized when using
+.Fl -check .
+.It 2
+The input was rejected as unsafe or malformed.
+.It 3
+A read, write, parse, or command-line usage error occurred.
+.It 4
+An internal error occurred.
+.El
+.Sh EXAMPLES
+Install the command and manual page:
+.Bd -literal -offset indent
+make install
+.Ed
+.Pp
+Sanitize an EPUB:
+.Bd -literal -offset indent
+epubscrub book.epub -o book.clean.epub
+.Ed
+.Pp
+Check an EPUB without writing a cleaned copy:
+.Bd -literal -offset indent
+epubscrub --check book.epub
+.Ed
+.Pp
+Write a report to a file:
+.Bd -literal -offset indent
+epubscrub book.epub -o book.clean.epub --report report.txt
+.Ed
+.Sh SECURITY NOTES
+.Nm
+cannot verify that the EPUB reader app itself is maintained.
+Open files from
+unknown sources with a current reader from a trusted vendor.
+.Pp
+Nested archives are not recursively unpacked.
+They are removed because they are
+outside the normal EPUB reading surface and can hide payloads.
+.Sh SEE ALSO
+.Nm
+uses the ZIP container format used by EPUB files.
