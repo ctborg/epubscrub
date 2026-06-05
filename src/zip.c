@@ -1,5 +1,6 @@
 #include "zip.h"
 
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,25 +41,32 @@ static void set_err(char *err, size_t err_len, const char *msg) {
     }
 }
 
-static int read_file(const char *path, unsigned char **out, size_t *len) {
+static int read_file(const char *path, unsigned char **out, size_t *len, char *err, size_t err_len) {
     FILE *f = fopen(path, "rb");
-    if (!f) return 0;
+    if (!f) {
+        if (err_len > 0) snprintf(err, err_len, "could not read input file '%s': %s", path, strerror(errno));
+        return 0;
+    }
     if (fseek(f, 0, SEEK_END) != 0) {
+        if (err_len > 0) snprintf(err, err_len, "could not seek input file '%s': %s", path, strerror(errno));
         fclose(f);
         return 0;
     }
     long n = ftell(f);
     if (n < 0) {
+        if (err_len > 0) snprintf(err, err_len, "could not size input file '%s': %s", path, strerror(errno));
         fclose(f);
         return 0;
     }
     rewind(f);
     unsigned char *buf = malloc((size_t)n ? (size_t)n : 1);
     if (!buf) {
+        if (err_len > 0) snprintf(err, err_len, "could not allocate memory for input file '%s'", path);
         fclose(f);
         return 0;
     }
     if (n > 0 && fread(buf, 1, (size_t)n, f) != (size_t)n) {
+        if (err_len > 0) snprintf(err, err_len, "could not read input file '%s': %s", path, strerror(errno));
         free(buf);
         fclose(f);
         return 0;
@@ -108,8 +116,7 @@ static int inflate_raw(const unsigned char *src, size_t src_len, unsigned char *
 zip_result zip_read_archive(const char *path, zip_archive *archive, char *err, size_t err_len) {
     unsigned char *buf = NULL;
     size_t len = 0;
-    if (!read_file(path, &buf, &len)) {
-        set_err(err, err_len, "could not read input file");
+    if (!read_file(path, &buf, &len, err, err_len)) {
         return ZIP_ERR_IO;
     }
     if (len > MAX_ARCHIVE_SIZE) {

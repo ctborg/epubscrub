@@ -33,9 +33,13 @@ The report shows whether the file is clean, would be sanitized, or is
 rejected.
 Removed files and modified content include a short reason.
 .It Fl -report Ar file
-Write the text report to
+Write the report to
 .Ar file
 instead of standard output.
+When used without
+.Fl o ,
+.Nm
+runs as a report-only check.
 .It Fl -report-format Ar text Ns | Ns Ar json
 Choose the report format.
 The default is
@@ -60,6 +64,7 @@ Write the sanitized EPUB to
 .Ar output.epub .
 Required unless
 .Fl -check
+or report-only mode
 is used.
 .It Fl h , Fl -help
 Show command usage.

@@ -60,7 +60,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (!input || (!ctx.check_only && !output)) {
+    if (!input) {
+        usage(stderr);
+        return 3;
+    }
+    if (!ctx.check_only && !output && ctx.report_path) {
+        ctx.check_only = 1;
+    }
+    if (!ctx.check_only && !output) {
         usage(stderr);
         return 3;
     }

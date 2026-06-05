@@ -119,6 +119,15 @@ grep -q 'summary: files_scanned=' "$TMP/dirty-check.txt"
 grep -q 'remove file: OEBPS/evil.js (reason: JavaScript is active content' "$TMP/dirty-check.txt"
 
 set +e
+"$ROOT/epubscrub" "$TMP/dirty.epub" --report "$TMP/report-only.txt"
+code=$?
+set -e
+test "$code" -eq 1
+test -f "$TMP/report-only.txt"
+grep -q 'status: sanitized' "$TMP/report-only.txt"
+test ! -f "$TMP/dirty.clean.epub"
+
+set +e
 "$ROOT/epubscrub" --check --calm "$TMP/dirty.epub" > "$TMP/calm-check.txt"
 code=$?
 set -e
@@ -194,6 +203,18 @@ code=$?
 set -e
 test "$code" -eq 0
 grep -q 'status: clean' "$TMP/check.txt"
+
+printf 'not readable' > "$TMP/noaccess.epub"
+chmod 000 "$TMP/noaccess.epub"
+if ! head -c 1 "$TMP/noaccess.epub" >/dev/null 2>&1; then
+    set +e
+    "$ROOT/epubscrub" --check "$TMP/noaccess.epub" > "$TMP/noaccess.txt" 2>&1
+    code=$?
+    set -e
+    test "$code" -eq 3
+    grep -q "could not read input file '$TMP/noaccess.epub':" "$TMP/noaccess.txt"
+fi
+chmod 600 "$TMP/noaccess.epub"
 
 python3 - "$TMP/traversal.epub" <<'PY'
 import sys, zipfile

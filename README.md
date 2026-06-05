@@ -43,7 +43,7 @@ make install PREFIX="$HOME/.local"
 ./epubscrub --check --paranoid --report-format json input.epub
 ```
 
-`--check` performs the same scan and in-memory sanitization pass without writing an output file. If a file would be removed, the report includes the reason, for example:
+`--check` performs the same scan and in-memory sanitization pass without writing an output file. `--report` without `-o` also runs as report-only check. If a file would be removed, the report includes the reason, for example:
 
 ```text
 remove file: OEBPS/evil.js (reason: JavaScript is active content and can execute in EPUB readers)
