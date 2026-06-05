@@ -1,5 +1,7 @@
 # epubscrub
 
+![epubscrub](epub.jpg)
+
 `epubscrub` is a small open source C utility that sanitizes EPUB files by removing common active-content and archive-based exploit vectors.
 
 It is a sanitizer, not a promise that a file is malware-free.
