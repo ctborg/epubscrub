@@ -44,6 +44,7 @@ make install PREFIX="$HOME/.local"
 ./epubscrub --check input.epub
 ./epubscrub input.epub --report report.txt
 ./epubscrub --check --paranoid --report-format json input.epub
+./epubscrub --version
 ```
 
 `--check` performs the same scan and in-memory sanitization pass without writing an output file. `--report` without `-o` also runs as report-only check. If a file would be removed, the report includes the reason, for example:

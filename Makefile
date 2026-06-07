@@ -10,10 +10,10 @@ INSTALL ?= install
 
 TARGET := epubscrub
 MANPAGE := man/epubscrub.1
-SRCS := src/main.c src/sanitize.c src/zip.c
+SRCS := src/main.c src/markup.c src/sanitize.c src/zip.c
 OBJS := $(SRCS:.c=.o)
 FUZZ_TARGET := fuzz_epub
-FUZZ_SRCS := fuzz/fuzz_epub.c src/sanitize.c src/zip.c
+FUZZ_SRCS := fuzz/fuzz_epub.c src/markup.c src/sanitize.c src/zip.c
 FUZZ_CORPUS := fuzz/corpus
 FUZZ_RUNS ?= 1000
 
@@ -41,6 +41,7 @@ uninstall:
 
 test: $(TARGET)
 	./tests/test_epubscrub.sh
+	./tests/test_markup_sanitize.sh
 
 $(FUZZ_TARGET): $(FUZZ_SRCS)
 	$(CC) -g -O1 -fsanitize=address,undefined -DEPUBSCRUB_STANDALONE_FUZZ $(CPPFLAGS) -o $@ $(FUZZ_SRCS) $(LDLIBS)

@@ -1,16 +1,10 @@
 #include "sanitize.h"
+#include "markup.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-static char *xstrdup(const char *s) {
-    size_t n = strlen(s) + 1;
-    char *out = malloc(n);
-    if (out) memcpy(out, s, n);
-    return out;
-}
 
 static int note(scrub_context *ctx, const char *kind, const char *name) {
     size_t need = strlen(kind) + strlen(name) + 4;
@@ -48,6 +42,13 @@ static int note_reason(scrub_context *ctx, const char *kind, const char *name, c
     }
     ctx->messages[ctx->message_count++] = msg;
     return 1;
+}
+
+static char *xstrdup(const char *s) {
+    size_t n = strlen(s) + 1;
+    char *out = malloc(n);
+    if (out) memcpy(out, s, n);
+    return out;
 }
 
 static int eqi(char a, char b) {
@@ -179,138 +180,6 @@ static char *append_range(char *out, size_t *len, size_t *cap, const char *src, 
     *len += n;
     out[*len] = '\0';
     return out;
-}
-
-static char *remove_tag_blocks(const char *src, const char *tag, int *changed) {
-    size_t len = strlen(src);
-    size_t out_len = 0, cap = 0;
-    char *out = NULL;
-    size_t i = 0;
-    char open[64], close[64];
-    snprintf(open, sizeof(open), "<%s", tag);
-    snprintf(close, sizeof(close), "</%s", tag);
-    while (i < len) {
-        if (src[i] == '<' && starts_i(src + i, open)) {
-            const char *end = strstr(src + i, ">");
-            const char *close_pos = NULL;
-            for (const char *p = src + i; *p; p++) {
-                if (*p == '<' && starts_i(p, close)) {
-                    close_pos = strstr(p, ">");
-                    break;
-                }
-            }
-            if (close_pos) {
-                i = (size_t)(close_pos - src) + 1;
-            } else if (end) {
-                i = (size_t)(end - src) + 1;
-            } else {
-                i = len;
-            }
-            *changed = 1;
-            continue;
-        }
-        out = append_range(out, &out_len, &cap, src + i, 1);
-        if (!out) return NULL;
-        i++;
-    }
-    return out ? out : xstrdup("");
-}
-
-static int dangerous_attr(const char *tag, size_t len) {
-    for (size_t i = 0; i + 2 < len; i++) {
-        if ((i == 0 || isspace((unsigned char)tag[i - 1])) && eqi(tag[i], 'o') && eqi(tag[i + 1], 'n') &&
-            isalpha((unsigned char)tag[i + 2])) {
-            return 1;
-        }
-    }
-    return contains_i_len(tag, len, "javascript:") || contains_i_len(tag, len, "vbscript:") ||
-           contains_i_len(tag, len, "data:text/html") || contains_i_len(tag, len, "data:image/svg");
-}
-
-static int tag_name_is(const char *tag, size_t len, const char *name) {
-    if (len < 2 || tag[0] != '<' || tag[1] == '/') return 0;
-    size_t p = 1;
-    while (p < len && isspace((unsigned char)tag[p])) p++;
-    size_t n = strlen(name);
-    return p + n <= len && starts_i(tag + p, name) &&
-           (p + n == len || isspace((unsigned char)tag[p + n]) || tag[p + n] == '>' || tag[p + n] == '/');
-}
-
-static int external_link_tag(const char *tag, size_t len) {
-    return contains_i_len(tag, len, "href=\"http://") || contains_i_len(tag, len, "href='http://") ||
-           contains_i_len(tag, len, "href=http://") || contains_i_len(tag, len, "href=\"https://") ||
-           contains_i_len(tag, len, "href='https://") || contains_i_len(tag, len, "href=https://");
-}
-
-static int external_resource_tag(const char *tag, size_t len, scrub_policy policy) {
-    if (policy == SCRUB_POLICY_CALM) {
-        return 0;
-    }
-    if (policy == SCRUB_POLICY_PARANOID && tag_name_is(tag, len, "a") && external_link_tag(tag, len)) {
-        return 1;
-    }
-    if (!tag_name_is(tag, len, "img") && !tag_name_is(tag, len, "link") && !tag_name_is(tag, len, "iframe")) {
-        return 0;
-    }
-    return contains_i_len(tag, len, "src=\"http://") || contains_i_len(tag, len, "src='http://") ||
-           contains_i_len(tag, len, "src=http://") || contains_i_len(tag, len, "src=\"https://") ||
-           contains_i_len(tag, len, "src='https://") || contains_i_len(tag, len, "src=https://") ||
-           contains_i_len(tag, len, "href=\"http://") || contains_i_len(tag, len, "href='http://") ||
-           contains_i_len(tag, len, "href=http://") || contains_i_len(tag, len, "href=\"https://") ||
-           contains_i_len(tag, len, "href='https://") || contains_i_len(tag, len, "href=https://");
-}
-
-static int remove_whole_tag_name(const char *tag, size_t len) {
-    const char *names[] = {"iframe", "object", "embed", "form", "input", "button", "textarea", "select", NULL};
-    for (int i = 0; names[i]; i++) {
-        if (tag_name_is(tag, len, names[i])) return 1;
-    }
-    return 0;
-}
-
-static char *sanitize_markup(const char *src, int *changed, scrub_policy policy) {
-    char *work = xstrdup(src);
-    if (!work) return NULL;
-    const char *blocks[] = {"script", "iframe", "object", "embed", "form", NULL};
-    for (int i = 0; blocks[i]; i++) {
-        char *next = remove_tag_blocks(work, blocks[i], changed);
-        free(work);
-        if (!next) return NULL;
-        work = next;
-    }
-
-    size_t len = strlen(work);
-    size_t out_len = 0, cap = 0;
-    char *out = NULL;
-    for (size_t i = 0; i < len;) {
-        if (work[i] == '<') {
-            char *end = strchr(work + i, '>');
-            if (end) {
-                size_t tag_len = (size_t)(end - (work + i)) + 1;
-                if (dangerous_attr(work + i, tag_len) || remove_whole_tag_name(work + i, tag_len) ||
-                    external_resource_tag(work + i, tag_len, policy)) {
-                    *changed = 1;
-                    i += tag_len;
-                    continue;
-                }
-                out = append_range(out, &out_len, &cap, work + i, tag_len);
-                if (!out) {
-                    free(work);
-                    return NULL;
-                }
-                i += tag_len;
-                continue;
-            }
-        }
-        out = append_range(out, &out_len, &cap, work + i, 1);
-        if (!out) {
-            free(work);
-            return NULL;
-        }
-        i++;
-    }
-    free(work);
-    return out ? out : xstrdup("");
 }
 
 static char *sanitize_css(const char *src, int *changed, scrub_policy policy) {
@@ -475,11 +344,11 @@ int scrub_entries(zip_archive *archive, scrub_context *ctx) {
         int changed = 0;
         char *clean = NULL;
         if (is_markup_name(entry->name)) {
-            clean = sanitize_markup(src, &changed, ctx->policy);
+            clean = markup_sanitize(src, ctx->policy, &changed);
         } else if (ends_i(entry->name, ".css")) {
             clean = sanitize_css(src, &changed, ctx->policy);
         } else if (ends_i(entry->name, ".opf")) {
-            clean = sanitize_markup(src, &changed, ctx->policy);
+            clean = markup_sanitize(src, ctx->policy, &changed);
             if (clean) {
                 char *opf = sanitize_opf_manifest(clean, entry->name, archive, &changed);
                 free(clean);
