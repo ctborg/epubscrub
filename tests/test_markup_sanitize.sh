@@ -34,8 +34,16 @@ run_case wary \
     '<img alt="x">'
 
 run_case wary \
+    '<img src=https://example.invalid/tracker.gif alt=x />' \
+    '<img alt=x />'
+
+run_case wary \
     '<link rel="stylesheet" href="https://example.invalid/style.css">' \
     '<link rel="stylesheet">'
+
+run_case wary \
+    '<svg><image xlink:href="https://example.invalid/tracker.png" width="1" /></svg>' \
+    '<svg><image width="1" /></svg>'
 
 run_case wary \
     '<a href="../chapter.xhtml#top">next</a><a href="https://example.invalid/page">site</a>' \

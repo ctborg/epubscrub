@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - Unreleased
+
+- Fixed unquoted URL attribute parsing so slash characters inside URLs do not bypass external-resource stripping.
+- Fixed SVG `<image xlink:href="https://...">` remote resource stripping under `wary`.
+
 ## 0.2.0 - 2026-06-05
 
 - Added `calm`, `wary`, and `paranoid` policy modes.

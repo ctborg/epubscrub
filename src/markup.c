@@ -173,7 +173,8 @@ static int url_attr(const attr_view *attr) {
 
 static int resource_url_attr(const char *tag, size_t tag_len, const attr_view *attr) {
     if (!attr_is(attr, "src") && !attr_is(attr, "href") && !attr_is(attr, "xlink:href")) return 0;
-    return tag_is(tag, tag_len, "img") || tag_is(tag, tag_len, "link") || tag_is(tag, tag_len, "iframe");
+    return tag_is(tag, tag_len, "img") || tag_is(tag, tag_len, "image") || tag_is(tag, tag_len, "link") ||
+           tag_is(tag, tag_len, "iframe");
 }
 
 static int remove_attr(const char *tag, size_t tag_len, const attr_view *attr, scrub_policy policy) {
@@ -217,7 +218,10 @@ static int parse_attr(const char *tag, size_t tag_len, size_t *p, attr_view *att
             if (*p < tag_len) (*p)++;
         } else {
             size_t value_start = *p;
-            while (*p < tag_len && !isspace((unsigned char)tag[*p]) && tag[*p] != '>' && tag[*p] != '/') (*p)++;
+            while (*p < tag_len && !isspace((unsigned char)tag[*p]) && tag[*p] != '>') {
+                if (tag[*p] == '/' && *p + 1 < tag_len && tag[*p + 1] == '>') break;
+                (*p)++;
+            }
             attr->value = tag + value_start;
             attr->value_len = *p - value_start;
         }

@@ -9,7 +9,7 @@ test -f "$ROOT/man/epubscrub.1"
 grep -q '^\.Sh SANITIZATION POLICY' "$ROOT/man/epubscrub.1"
 grep -q '^\.It 1$' "$ROOT/man/epubscrub.1"
 "$ROOT/epubscrub" --version > "$TMP/version.txt"
-grep -q '^epubscrub 0\.3\.0-dev$' "$TMP/version.txt"
+grep -q '^epubscrub 0\.3\.1-dev$' "$TMP/version.txt"
 
 mkdir -p "$TMP/book/META-INF" "$TMP/book/OEBPS"
 printf 'application/epub+zip' > "$TMP/book/mimetype"

@@ -1,6 +1,6 @@
 #ifndef EPUBSCRUB_VERSION_H
 #define EPUBSCRUB_VERSION_H
 
-#define EPUBSCRUB_VERSION "0.3.0-dev"
+#define EPUBSCRUB_VERSION "0.3.1-dev"
 
 #endif
