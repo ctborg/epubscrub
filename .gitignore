@@ -1,5 +1,7 @@
 # Build outputs
 /epubscrub
+/fuzz_epub
+/fuzz_epub.dSYM/
 *.o
 *.a
 *.dylib

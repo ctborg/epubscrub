@@ -12,6 +12,7 @@ It is a sanitizer, not a promise that a file is malware-free.
 - `calm`, `wary`, and `paranoid` policy modes
 - Text and JSON reports
 - JavaScript, event-handler, unsafe URL, suspicious file, and path-traversal cleanup
+- Fuzz-style smoke testing with ASan/UBSan
 - Manual page with `make install`
 - macOS and Linux CI
 
@@ -71,8 +72,17 @@ Reports can be text or JSON:
 make clean
 make
 make test
+make fuzz-smoke
 mandoc -Tlint man/epubscrub.1
 ```
+
+For longer fuzz-style runs:
+
+```sh
+make fuzz-smoke FUZZ_RUNS=100000
+```
+
+See [fuzz/README.md](fuzz/README.md) for the optional libFuzzer target.
 
 Exit codes:
 

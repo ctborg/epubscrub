@@ -16,6 +16,8 @@ jobs:
         run: make clean && make
       - name: Test
         run: make test
+      - name: Fuzz smoke
+        run: make fuzz-smoke
       - name: Lint man page
         run: mandoc -Tlint man/epubscrub.1
 
@@ -30,5 +32,7 @@ jobs:
         run: make clean && make
       - name: Test
         run: make test
+      - name: Fuzz smoke
+        run: make fuzz-smoke
       - name: Lint man page
         run: mandoc -Tlint man/epubscrub.1

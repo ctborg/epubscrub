@@ -12,8 +12,12 @@ TARGET := epubscrub
 MANPAGE := man/epubscrub.1
 SRCS := src/main.c src/sanitize.c src/zip.c
 OBJS := $(SRCS:.c=.o)
+FUZZ_TARGET := fuzz_epub
+FUZZ_SRCS := fuzz/fuzz_epub.c src/sanitize.c src/zip.c
+FUZZ_CORPUS := fuzz/corpus
+FUZZ_RUNS ?= 1000
 
-.PHONY: all clean test man install uninstall
+.PHONY: all clean test man install uninstall fuzz-smoke fuzz-libfuzzer
 
 all: $(TARGET)
 
@@ -21,7 +25,8 @@ $(TARGET): $(OBJS)
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDLIBS)
 
 clean:
-	rm -f $(TARGET) $(OBJS)
+	rm -f $(TARGET) $(OBJS) $(FUZZ_TARGET)
+	rm -rf $(FUZZ_TARGET).dSYM
 
 man: $(MANPAGE)
 	@printf '%s\n' "$(MANPAGE)"
@@ -36,3 +41,12 @@ uninstall:
 
 test: $(TARGET)
 	./tests/test_epubscrub.sh
+
+$(FUZZ_TARGET): $(FUZZ_SRCS)
+	$(CC) -g -O1 -fsanitize=address,undefined -DEPUBSCRUB_STANDALONE_FUZZ $(CPPFLAGS) -o $@ $(FUZZ_SRCS) $(LDLIBS)
+
+fuzz-smoke: $(FUZZ_TARGET)
+	./$(FUZZ_TARGET) -runs=$(FUZZ_RUNS) $(FUZZ_CORPUS)
+
+fuzz-libfuzzer: $(FUZZ_SRCS)
+	$(CC) -g -O1 -fsanitize=fuzzer,address,undefined $(CPPFLAGS) -o $(FUZZ_TARGET) $(FUZZ_SRCS) $(LDLIBS)
