@@ -16,6 +16,7 @@ typedef enum {
 
 typedef struct {
     int check_only;
+    int fix;
     const char *report_path;
     scrub_policy policy;
     scrub_report_format report_format;

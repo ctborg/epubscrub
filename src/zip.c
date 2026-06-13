@@ -382,28 +382,32 @@ zip_result zip_write_archive(const char *path, const zip_archive *archive, char 
         return ZIP_ERR_IO;
     }
     uint32_t cd_start = (uint32_t)cd_start_l;
-    for (size_t i = 0; i < archive->count; i++) {
-        const zip_entry *entry = &archive->entries[i];
-        if (entry->removed) continue;
-        size_t name_len = strlen(entry->name);
-        wr32(f, CEN_SIG);
-        wr16(f, 20);
-        wr16(f, 20);
-        wr16(f, 0);
-        wr16(f, meta[i].method);
-        wr16(f, 0);
-        wr16(f, 0);
-        wr32(f, meta[i].crc);
-        wr32(f, meta[i].comp_size);
-        wr32(f, (uint32_t)entry->size);
-        wr16(f, (uint16_t)name_len);
-        wr16(f, 0);
-        wr16(f, 0);
-        wr16(f, 0);
-        wr16(f, 0);
-        wr32(f, 0);
-        wr32(f, meta[i].offset);
-        fwrite(entry->name, 1, name_len, f);
+    for (size_t pass = 0; pass < 2; pass++) {
+        for (size_t i = 0; i < archive->count; i++) {
+            const zip_entry *entry = &archive->entries[i];
+            if (entry->removed) continue;
+            int is_mimetype = strcmp(entry->name, "mimetype") == 0;
+            if ((pass == 0 && !is_mimetype) || (pass == 1 && is_mimetype)) continue;
+            size_t name_len = strlen(entry->name);
+            wr32(f, CEN_SIG);
+            wr16(f, 20);
+            wr16(f, 20);
+            wr16(f, 0);
+            wr16(f, meta[i].method);
+            wr16(f, 0);
+            wr16(f, 0);
+            wr32(f, meta[i].crc);
+            wr32(f, meta[i].comp_size);
+            wr32(f, (uint32_t)entry->size);
+            wr16(f, (uint16_t)name_len);
+            wr16(f, 0);
+            wr16(f, 0);
+            wr16(f, 0);
+            wr16(f, 0);
+            wr32(f, 0);
+            wr32(f, meta[i].offset);
+            fwrite(entry->name, 1, name_len, f);
+        }
     }
     long cd_end_l = ftell(f);
     if (cd_end_l < 0 || cd_end_l > UINT32_MAX) {

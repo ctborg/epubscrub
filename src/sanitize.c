@@ -44,6 +44,27 @@ static int note_reason(scrub_context *ctx, const char *kind, const char *name, c
     return 1;
 }
 
+static int note_reason_line(scrub_context *ctx, const char *kind, const char *name, size_t line, const char *reason) {
+    size_t line_digits = 1;
+    for (size_t n = line; n >= 10; n /= 10) line_digits++;
+    size_t need = strlen(kind) + strlen(name) + strlen(reason) + strlen(":  (line: , reason: )") + line_digits + 1;
+    char *msg = malloc(need);
+    if (!msg) return 0;
+    snprintf(msg, need, "%s: %s (line: %zu, reason: %s)", kind, name, line, reason);
+    if (ctx->message_count == ctx->message_cap) {
+        size_t next = ctx->message_cap ? ctx->message_cap * 2 : 16;
+        char **messages = realloc(ctx->messages, next * sizeof(*messages));
+        if (!messages) {
+            free(msg);
+            return 0;
+        }
+        ctx->messages = messages;
+        ctx->message_cap = next;
+    }
+    ctx->messages[ctx->message_count++] = msg;
+    return 1;
+}
+
 static char *xstrdup(const char *s) {
     size_t n = strlen(s) + 1;
     char *out = malloc(n);
@@ -295,22 +316,44 @@ static int replace_entry_data(zip_entry *entry, char *text) {
     return 1;
 }
 
+static size_t first_changed_line(const char *before, const char *after) {
+    size_t i = 0;
+    while (before[i] && after[i] && before[i] == after[i]) i++;
+    size_t line = 1;
+    for (size_t j = 0; j < i; j++) {
+        if (before[j] == '\n') line++;
+    }
+    return line;
+}
+
 int scrub_entries(zip_archive *archive, scrub_context *ctx) {
     int has_mimetype = 0;
     ctx->files_scanned = archive->count;
     if (archive->count == 0 || strcmp(archive->entries[0].name, "mimetype") != 0) {
-        ctx->rejected = 1;
-        ctx->warnings++;
-        note(ctx, "reject", "mimetype is not the first ZIP entry");
+        if (ctx->fix) {
+            ctx->changed = 1;
+            ctx->warnings++;
+            note(ctx, "fix", "mimetype will be written as the first ZIP entry");
+        } else {
+            ctx->rejected = 1;
+            ctx->warnings++;
+            note(ctx, "reject", "mimetype is not the first ZIP entry");
+        }
     }
     for (size_t i = 0; i < archive->count; i++) {
         zip_entry *entry = &archive->entries[i];
         if (strcmp(entry->name, "mimetype") == 0) {
             has_mimetype = 1;
             if (entry->method != 0) {
-                ctx->rejected = 1;
-                ctx->warnings++;
-                note(ctx, "reject", "mimetype is compressed");
+                if (ctx->fix) {
+                    ctx->changed = 1;
+                    ctx->warnings++;
+                    note(ctx, "fix", "mimetype will be written uncompressed");
+                } else {
+                    ctx->rejected = 1;
+                    ctx->warnings++;
+                    note(ctx, "reject", "mimetype is compressed");
+                }
             }
             if (entry->size != strlen("application/epub+zip") ||
                 memcmp(entry->data, "application/epub+zip", entry->size) != 0) {
@@ -355,27 +398,32 @@ int scrub_entries(zip_archive *archive, scrub_context *ctx) {
                 clean = opf;
             }
         }
-        free(src);
         if (!clean && (is_markup_name(entry->name) || ends_i(entry->name, ".css") || ends_i(entry->name, ".opf"))) {
+            free(src);
             return -1;
         }
         if (changed) {
-            if (!replace_entry_data(entry, clean)) return -1;
+            size_t line = first_changed_line(src, clean);
+            if (!replace_entry_data(entry, clean)) {
+                free(src);
+                return -1;
+            }
             ctx->changed = 1;
             ctx->files_modified++;
             if (ends_i(entry->name, ".css")) {
-                note_reason(ctx, "sanitize", entry->name,
-                            "removed remote imports or unsafe CSS URLs; local CSS is preserved");
+                note_reason_line(ctx, "sanitize", entry->name, line,
+                                 "removed remote imports or unsafe CSS URLs; local CSS is preserved");
             } else if (ends_i(entry->name, ".opf")) {
-                note_reason(ctx, "sanitize", entry->name,
-                            "removed unsafe metadata or manifest references to removed files");
+                note_reason_line(ctx, "sanitize", entry->name, line,
+                                 "removed unsafe metadata or manifest references to removed files");
             } else {
-                note_reason(ctx, "sanitize", entry->name,
-                            "removed active markup, event handlers, or unsafe external/script URLs");
+                note_reason_line(ctx, "sanitize", entry->name, line,
+                                 "removed active markup, event handlers, or unsafe external/script URLs");
             }
         } else {
             free(clean);
         }
+        free(src);
     }
     return 0;
 }

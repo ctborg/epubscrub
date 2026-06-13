@@ -6,7 +6,8 @@
 .Nd sanitize EPUB files by removing common exploit vectors
 .Sh SYNOPSIS
 .Nm
-.Op Fl -check
+.Op Fl -dryrun
+.Op Fl -fix
 .Op Fl -policy Ar calm Ns | Ns Ar wary Ns | Ns Ar paranoid
 .Op Fl -calm | Fl -wary | Fl -paranoid
 .Op Fl -report Ar file
@@ -28,12 +29,22 @@ to reduce common EPUB attack surfaces such as active markup, embedded scripts,
 unsafe archive entries, and unexpected binary payloads.
 .Sh OPTIONS
 .Bl -tag -width Ds
-.It Fl -check
+.It Fl -dryrun
 Run the full scan and in-memory sanitization pass without writing an output
 EPUB.
 The report shows whether the file is clean, would be sanitized, or is
 rejected.
-Removed files and modified content include a short reason.
+Removed files include a short reason.
+Modified content includes the first affected line number and a short reason.
+The legacy
+.Fl -check
+spelling is accepted as a compatibility alias.
+.It Fl -fix
+Allow safe structural EPUB repairs while writing an output EPUB.
+Currently this repairs
+.Pa mimetype
+placement and compression by writing it as the first ZIP entry, stored
+uncompressed.
 .It Fl -report Ar file
 Write the report to
 .Ar file
@@ -41,7 +52,7 @@ instead of standard output.
 When used without
 .Fl o ,
 .Nm
-runs as a report-only check.
+runs as a report-only dry run.
 .It Fl -report-format Ar text Ns | Ns Ar json
 Choose the report format.
 The default is
@@ -64,8 +75,10 @@ text links.
 .It Fl o Ar output.epub
 Write the sanitized EPUB to
 .Ar output.epub .
+The output is written even when no changes are required.
+The output path must not refer to the same file as the input.
 Required unless
-.Fl -check
+.Fl -dryrun
 or report-only mode
 is used.
 .It Fl h , Fl -help
@@ -98,7 +111,8 @@ Event handler attributes such as
 and
 .Li onload .
 .It
-External resource loads in
+External links and resource loads in
+.Li <a> ,
 .Li <img> ,
 .Li <link> ,
 and
@@ -130,16 +144,16 @@ policy is less disruptive and permits remote resource references except for
 script-oriented URLs.
 The
 .Ar paranoid
-policy is more aggressive and removes SVG, fonts, media, and external text
-links.
+policy is more aggressive and also removes SVG, fonts, and media.
 .Pp
 When a file is removed, matching OPF manifest entries are removed as well.
 .Sh OUTPUT
 Text reports include the input, optional output, status, policy, summary counts,
 and event lines.
+Sanitized file-content events include the first affected source line.
 JSON reports include the same fields as structured data:
 .Bd -literal -offset indent
-epubscrub --check --policy paranoid --report-format json book.epub
+epubscrub --dryrun --policy paranoid --report-format json book.epub
 .Ed
 .Sh EXIT STATUS
 .Bl -tag -width Ds
@@ -147,7 +161,7 @@ epubscrub --check --policy paranoid --report-format json book.epub
 The input was already clean.
 .It 1
 The input was sanitized or would be sanitized when using
-.Fl -check .
+.Fl -dryrun .
 .It 2
 The input was rejected as unsafe or malformed.
 .It 3
@@ -168,7 +182,7 @@ epubscrub book.epub -o book.clean.epub
 .Pp
 Check an EPUB without writing a cleaned copy:
 .Bd -literal -offset indent
-epubscrub --check book.epub
+epubscrub --dryrun book.epub
 .Ed
 .Pp
 Write a report to a file:

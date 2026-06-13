@@ -41,30 +41,38 @@ make install PREFIX="$HOME/.local"
 
 ```sh
 ./epubscrub input.epub -o clean.epub
-./epubscrub --check input.epub
+./epubscrub --dryrun input.epub
+./epubscrub --fix input.epub -o clean.epub
 ./epubscrub input.epub --report report.txt
-./epubscrub --check --paranoid --report-format json input.epub
+./epubscrub --dryrun --paranoid --report-format json input.epub
 ./epubscrub --version
 ```
 
-`--check` performs the same scan and in-memory sanitization pass without writing an output file. `--report` without `-o` also runs as report-only check. If a file would be removed, the report includes the reason, for example:
+`--dryrun` performs the same scan and in-memory sanitization pass without writing an output file. `--report` without `-o` also runs as a report-only dry run. The older `--check` spelling is still accepted as a compatibility alias.
+
+If a file would be removed, the report includes the reason. If file content is sanitized, the report includes the first affected line:
 
 ```text
 remove file: OEBPS/evil.js (reason: JavaScript is active content and can execute in EPUB readers)
+sanitize: OEBPS/chapter.xhtml (line: 3, reason: removed active markup, event handlers, or unsafe external/script URLs)
 ```
+
+`--fix` allows safe structural EPUB repairs. Currently it can repair `mimetype` placement/compression by rewriting the EPUB with `mimetype` as the first ZIP entry and stored uncompressed.
+
+When `-o` is used, `epubscrub` always writes the output EPUB, even if the input was already clean. The output path must not be the same file as the input path.
 
 ## Policy Modes
 
 `epubscrub` defaults to `wary`.
 
 - `--calm` or `--policy calm`: removes clear active/script/executable payloads while leaving more normal EPUB resources alone
-- `--wary` or `--policy wary`: default practical baseline; removes active content, unknown types, external resource loads, and unsafe CSS URLs
-- `--paranoid` or `--policy paranoid`: minimizes attack surface; also removes SVG, fonts, media, and external text links
+- `--wary` or `--policy wary`: default practical baseline; removes active content, unknown types, external links/resource loads, and unsafe CSS URLs
+- `--paranoid` or `--policy paranoid`: minimizes attack surface; also removes SVG, fonts, and media
 
 Reports can be text or JSON:
 
 ```sh
-./epubscrub --check --policy paranoid --report-format json book.epub
+./epubscrub --dryrun --policy paranoid --report-format json book.epub
 ```
 
 ## Development
@@ -103,7 +111,7 @@ The default `wary` policy removes:
 - ZIP entries with path traversal or unsafe names
 - `<script>`, `<iframe>`, `<object>`, `<embed>`, and form controls in XHTML/SVG
 - Event handler attributes such as `onclick` and `onload`
-- External resource loads in `<img>`, `<link>`, and `<iframe>` tags
+- External links and resource loads in `<a>`, `<img>`, `<link>`, and `<iframe>` tags
 - `javascript:`, `vbscript:`, and unsafe `data:` URLs
 - CSS `@import` rules and remote/script/data `url(...)` values
 

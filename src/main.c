@@ -2,14 +2,54 @@
 #include "version.h"
 #include "zip.h"
 
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 static void usage(FILE *out) {
-    fputs("Usage: epubscrub [--check] [--policy calm|wary|paranoid] "
+    fputs("Usage: epubscrub [--dryrun] [--fix] [--policy calm|wary|paranoid] "
           "[--report FILE] [--report-format text|json] INPUT.epub [-o OUTPUT.epub]\n",
           out);
+}
+
+static int same_existing_file(const char *a, const char *b) {
+    struct stat sa;
+    struct stat sb;
+    if (stat(a, &sa) != 0 || stat(b, &sb) != 0) return 0;
+    return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
+}
+
+static int same_path_target(const char *input, const char *output) {
+    if (same_existing_file(input, output)) return 1;
+
+    char input_real[PATH_MAX];
+    if (!realpath(input, input_real)) return 0;
+
+    char output_copy[PATH_MAX];
+    if (snprintf(output_copy, sizeof(output_copy), "%s", output) >= (int)sizeof(output_copy)) return 0;
+
+    char *slash = strrchr(output_copy, '/');
+    const char *base = output_copy;
+    const char *parent = ".";
+    char parent_buf[PATH_MAX];
+    if (slash) {
+        base = slash + 1;
+        if (slash == output_copy) {
+            parent = "/";
+        } else {
+            *slash = '\0';
+            parent = output_copy;
+        }
+    }
+    if (*base == '\0') return 0;
+
+    char parent_real[PATH_MAX];
+    if (!realpath(parent, parent_real)) return 0;
+    if (snprintf(parent_buf, sizeof(parent_buf), "%s/%s", parent_real, base) >= (int)sizeof(parent_buf)) return 0;
+    return strcmp(input_real, parent_buf) == 0;
 }
 
 int main(int argc, char **argv) {
@@ -26,8 +66,10 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "-V") == 0 || strcmp(argv[i], "--version") == 0) {
             printf("epubscrub %s\n", EPUBSCRUB_VERSION);
             return 0;
-        } else if (strcmp(argv[i], "--check") == 0) {
+        } else if (strcmp(argv[i], "--dryrun") == 0 || strcmp(argv[i], "--check") == 0) {
             ctx.check_only = 1;
+        } else if (strcmp(argv[i], "--fix") == 0) {
+            ctx.fix = 1;
         } else if (strcmp(argv[i], "--report") == 0) {
             if (++i >= argc) {
                 usage(stderr);
@@ -75,6 +117,10 @@ int main(int argc, char **argv) {
         usage(stderr);
         return 3;
     }
+    if (!ctx.check_only && output && same_path_target(input, output)) {
+        fprintf(stderr, "epubscrub: output path must not be the same as input path\n");
+        return 3;
+    }
 
     char err[512];
     zip_archive archive = {0};
@@ -92,7 +138,7 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    if (!ctx.check_only && ctx.changed) {
+    if (!ctx.check_only) {
         zr = zip_write_archive(output, &archive, err, sizeof(err));
         if (zr != ZIP_OK) {
             fprintf(stderr, "epubscrub: %s\n", err);

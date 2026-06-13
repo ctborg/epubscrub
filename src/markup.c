@@ -67,6 +67,26 @@ static int out_append_char(outbuf *out, char c) {
     return out_append(out, &c, 1);
 }
 
+static int out_append_escaped(outbuf *out, const char *src, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        switch (src[i]) {
+            case '<':
+                if (!out_append(out, "&lt;", 4)) return 0;
+                break;
+            case '>':
+                if (!out_append(out, "&gt;", 4)) return 0;
+                break;
+            case '&':
+                if (!out_append(out, "&amp;", 5)) return 0;
+                break;
+            default:
+                if (!out_append_char(out, src[i])) return 0;
+                break;
+        }
+    }
+    return 1;
+}
+
 static char *out_finish(outbuf *out) {
     if (!out->buf) {
         out->buf = malloc(1);
@@ -87,11 +107,11 @@ static int skip_ws(const char *s, size_t len, size_t *p) {
 
 static size_t find_tag_end(const char *s, size_t len, size_t start, int *malformed) {
     char quote = '\0';
-    if (start + MAX_TAG_LEN < len) {
-        len = start + MAX_TAG_LEN;
-        *malformed = 1;
+    size_t end_limit = len;
+    if (start + MAX_TAG_LEN < end_limit) {
+        end_limit = start + MAX_TAG_LEN;
     }
-    for (size_t i = start + 1; i < len; i++) {
+    for (size_t i = start + 1; i < end_limit; i++) {
         char c = s[i];
         if (quote) {
             if (c == quote) quote = '\0';
@@ -139,6 +159,18 @@ static int tag_only_drop_tag(const char *name, size_t name_len) {
     return tag_is(name, name_len, "input");
 }
 
+static int known_watermark_block(const char *name, size_t name_len, const char *body, size_t body_len) {
+    return tag_is(name, name_len, "div") && contains_i_len(body, body_len, "oceanofpdf.com");
+}
+
+static int self_closing_tag(const char *tag, size_t tag_len) {
+    if (tag_len < 3) return 0;
+    size_t p = tag_len - 1;
+    if (tag[p] == '>') p--;
+    while (p > 0 && isspace((unsigned char)tag[p])) p--;
+    return tag[p] == '/';
+}
+
 static int remove_attr_name(const char *name, size_t name_len) {
     if (name_len >= 3 && eqi(name[0], 'o') && eqi(name[1], 'n') && isalpha((unsigned char)name[2])) {
         return 1;
@@ -184,7 +216,7 @@ static int remove_attr(const char *tag, size_t tag_len, const attr_view *attr, s
     if (policy != SCRUB_POLICY_CALM && resource_url_attr(tag, tag_len, attr) && external_url(attr->value, attr->value_len)) {
         return 1;
     }
-    if (policy == SCRUB_POLICY_PARANOID && tag_is(tag, tag_len, "a") && attr_is(attr, "href") &&
+    if (policy != SCRUB_POLICY_CALM && tag_is(tag, tag_len, "a") && attr_is(attr, "href") &&
         external_url(attr->value, attr->value_len)) {
         return 1;
     }
@@ -330,6 +362,7 @@ char *markup_sanitize(const char *src, scrub_policy policy, int *changed) {
             const char *end = strstr(src + tag_start + 4, "-->");
             if (!end) {
                 *changed = 1;
+                if (!out_append_escaped(&out, src + tag_start, len - tag_start)) return NULL;
                 break;
             }
             size_t n = (size_t)(end - (src + tag_start)) + 3;
@@ -342,6 +375,7 @@ char *markup_sanitize(const char *src, scrub_policy policy, int *changed) {
             size_t end = find_tag_end(src, len, tag_start, &malformed);
             if (end == SIZE_MAX) {
                 *changed = 1;
+                if (!out_append_escaped(&out, src + tag_start, len - tag_start)) return NULL;
                 break;
             }
             if (!out_append(&out, src + tag_start, end - tag_start + 1)) return NULL;
@@ -353,6 +387,7 @@ char *markup_sanitize(const char *src, scrub_policy policy, int *changed) {
         size_t tag_end = find_tag_end(src, len, tag_start, &malformed);
         if (tag_end == SIZE_MAX || malformed) {
             *changed = 1;
+            if (!out_append_escaped(&out, src + tag_start, len - tag_start)) return NULL;
             break;
         }
         const char *name;
@@ -361,8 +396,21 @@ char *markup_sanitize(const char *src, scrub_policy policy, int *changed) {
         if (tag_name(src + tag_start, tag_end - tag_start + 1, &name, &name_len, &is_end) && !is_end &&
             body_drop_tag(name, name_len)) {
             *changed = 1;
-            pos = find_matching_end(src, len, tag_end + 1, name, name_len);
+            if (self_closing_tag(src + tag_start, tag_end - tag_start + 1)) {
+                pos = tag_end + 1;
+            } else {
+                pos = find_matching_end(src, len, tag_end + 1, name, name_len);
+            }
             continue;
+        }
+        if (tag_name(src + tag_start, tag_end - tag_start + 1, &name, &name_len, &is_end) && !is_end &&
+            tag_is(name, name_len, "div")) {
+            size_t block_end = find_matching_end(src, len, tag_end + 1, name, name_len);
+            if (known_watermark_block(name, name_len, src + tag_end + 1, block_end - tag_end - 1)) {
+                *changed = 1;
+                pos = block_end;
+                continue;
+            }
         }
         if (!emit_sanitized_tag(&out, src + tag_start, tag_end - tag_start + 1, policy, changed)) return NULL;
         pos = tag_end + 1;

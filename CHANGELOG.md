@@ -2,6 +2,9 @@
 
 ## 0.3.1 - Unreleased
 
+- Added `--dryrun` as the documented report-only scan flag, with `--check` kept as a compatibility alias.
+- Added first affected line numbers to sanitized file-content report events.
+- Removed external `<a href="http(s)://...">` links under the default `wary` policy.
 - Fixed unquoted URL attribute parsing so slash characters inside URLs do not bypass external-resource stripping.
 - Fixed SVG `<image xlink:href="https://...">` remote resource stripping under `wary`.
 
