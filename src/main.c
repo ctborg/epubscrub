@@ -2,7 +2,6 @@
 #include "version.h"
 #include "zip.h"
 
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,19 +21,28 @@ static int same_existing_file(const char *a, const char *b) {
     return sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
 }
 
+static char *dup_string(const char *s) {
+    size_t n = strlen(s) + 1;
+    char *out = malloc(n);
+    if (out) memcpy(out, s, n);
+    return out;
+}
+
 static int same_path_target(const char *input, const char *output) {
     if (same_existing_file(input, output)) return 1;
 
-    char input_real[PATH_MAX];
-    if (!realpath(input, input_real)) return 0;
+    char *input_real = realpath(input, NULL);
+    if (!input_real) return 0;
 
-    char output_copy[PATH_MAX];
-    if (snprintf(output_copy, sizeof(output_copy), "%s", output) >= (int)sizeof(output_copy)) return 0;
+    char *output_copy = dup_string(output);
+    if (!output_copy) {
+        free(input_real);
+        return 0;
+    }
 
     char *slash = strrchr(output_copy, '/');
     const char *base = output_copy;
     const char *parent = ".";
-    char parent_buf[PATH_MAX];
     if (slash) {
         base = slash + 1;
         if (slash == output_copy) {
@@ -44,12 +52,39 @@ static int same_path_target(const char *input, const char *output) {
             parent = output_copy;
         }
     }
-    if (*base == '\0') return 0;
+    if (*base == '\0') {
+        free(output_copy);
+        free(input_real);
+        return 0;
+    }
 
-    char parent_real[PATH_MAX];
-    if (!realpath(parent, parent_real)) return 0;
-    if (snprintf(parent_buf, sizeof(parent_buf), "%s/%s", parent_real, base) >= (int)sizeof(parent_buf)) return 0;
-    return strcmp(input_real, parent_buf) == 0;
+    char *parent_real = realpath(parent, NULL);
+    if (!parent_real) {
+        free(output_copy);
+        free(input_real);
+        return 0;
+    }
+    size_t parent_len = strlen(parent_real);
+    size_t base_len = strlen(base);
+    int needs_slash = parent_len > 0 && parent_real[parent_len - 1] != '/';
+    char *target = malloc(parent_len + (needs_slash ? 1u : 0u) + base_len + 1u);
+    if (!target) {
+        free(parent_real);
+        free(output_copy);
+        free(input_real);
+        return 0;
+    }
+    memcpy(target, parent_real, parent_len);
+    size_t pos = parent_len;
+    if (needs_slash) target[pos++] = '/';
+    memcpy(target + pos, base, base_len + 1);
+
+    int same = strcmp(input_real, target) == 0;
+    free(target);
+    free(parent_real);
+    free(output_copy);
+    free(input_real);
+    return same;
 }
 
 int main(int argc, char **argv) {
